@@ -1,35 +1,39 @@
 from socket import *
-import sys
-import os
-import time
+import sys, os, time
 
 ##############################################################
 ########################  FUNCTIONS  #########################
 ##############################################################
 
+# Creates and sends error response to client.
+# Closes socket.
 def errorResponse(statusCode, phrase):
 	tnow = time.gmtime()
-	tnowstr = time.strftime('%a, %d %b %Y %H:%M:%S %Z', tnow)
+	tnowstr = time.strftime('%a, %d %b %Y %H:%M:%S %Z', tnow) # format time
 
 	response = 'HTTP/1.1 ' + statusCode + ' ' + phrase + '\r\n' # status line
 	response += 'Date: ' + tnowstr + '\r\n'						# header lines
-	response += 'Server: Apache/2.0.52 (CentOS)\r\n'
+	response += 'Server: Meme/4.u (Gentoo)\r\n'
 	connectionSocket.send(response.encode())
 	connectionSocket.close()
 
+# Creates response with necessary header lines.
+# Returns response.
 def createResponse(statusCode, phrase, length, type, modified):
 	tnow = time.gmtime()
-	tnowstr = time.strftime('%a, %d %b %Y %H:%M:%S %Z', tnow)
+	tnowstr = time.strftime('%a, %d %b %Y %H:%M:%S %Z', tnow) # format time
 
 	response = 'HTTP/1.1 ' + statusCode + ' ' + phrase + '\r\n' # status line
 	response += 'Date: ' + tnowstr + '\r\n' 					# header lines
 	response += 'Server: Meme/4.u (Gentoo)\r\n'
 	response += 'Last-Modified: ' + modified + '\r\n'
 	response += 'Content-Length: ' + str(length) + '\r\n'
-	response += 'Content-Type: ' + str(type) + ' \r\n'
+	response += 'Content-Type: ' + type + ' \r\n'
 	response += '\r\n'
 	return response
 
+# Returns True if request line is properly formatted and has 
+# supported Method. Sends error and returns false otherwise.
 def checkRequestLine(requestLine):
 	if len(requestLine) != 3:
 		errorResponse('400', 'Bad Request')
@@ -47,15 +51,19 @@ def checkRequestLine(requestLine):
 		errorResponse('505', 'HTTP Unsupported')
 		return False
 
+	return True
+
+# Checks header lines for proper formatting and required Host
+# header.  Sends error and returns false otherwise.
 def checkHeaderLines(headerLines):
 	# checks for last two /r/n 
 	if lines[len(lines)-1] != '' or lines[len(lines)-2] != '':
 		errorResponse('400', 'Bad Request')
 		return False
 
+	# searches header lines for Host
 	count = 1;
-
-	while count < len(headerLines):
+	while count < len(headerLines): 
 		if headerLines[count][:4] == 'Host':
 			return True
 		count += 1
@@ -63,6 +71,8 @@ def checkHeaderLines(headerLines):
 	errorResponse('400', 'Bad Request')
 	return False
 
+# Turns time formatted in string into a time object for comparisons.
+# Returns in time format.
 def getTime(timeString):
 	date = None
 	try:
@@ -77,6 +87,8 @@ def getTime(timeString):
 				return None
 	return date
 
+# Gets the modified time of the file being requested.  
+# Returns in string format.
 def getTimeMod(file_name):
 	try:
 		timemod = os.path.getmtime(file_name)
@@ -87,7 +99,9 @@ def getTimeMod(file_name):
 	tmodstr = time.strftime('%a, %d %b %Y %H:%M:%S %Z', timemod)
 	return tmodstr
 
-# will be used to determine 
+# Compares file modified time and header if-modified time.
+# Returns True if modified time was after if-modified time.
+# Returns False and sends error otherwise.
 def checkIfModified(headerLines, timeMod):
 	count = 1;
 
@@ -95,6 +109,8 @@ def checkIfModified(headerLines, timeMod):
 		if headerLines[count][:6] == 'If-Mod':
 			ifMod = headerLines[count][19:]
 
+			# won't send file if modified time was before 
+			# if-modified time
 			if getTime(timeMod) <= getTime(ifMod):
 				errorResponse('304', 'Not Modified')
 				return False
@@ -130,8 +146,9 @@ while 1:
 	# start parsing the HTTP request message
 	lines = message.split('\r\n')
 
-	for x in range(0, len(lines)):
-		print(lines[x])
+	# used for debugging from requests sent
+	# for x in range(0, len(lines)):
+	# 	print(lines[x])
 	
 	# check if Request line is valid (method, url, version)
 	statusLine = lines[0].split(' ')
@@ -154,9 +171,12 @@ while 1:
 		else:
 			filename = filename[1:]
 
+	# split file into filename and extension
 	fileExt = filename.split('.')
 	fileType = 'text/html'
 
+	# Try to resolve opening files by extension type.
+	# Catch and error if no extension (not supported)
 	try:	
 		# handle text requests
 		if fileExt[1] == 'txt':
@@ -204,6 +224,7 @@ while 1:
 			errorResponse('415', 'Unsupported Media Type')
 			continue
 
+		# Sends generated response with 200 OK code and contents requested.
 		connectionSocket.send(createResponse('200', 'OK', len(contents), fileType, timeModified).encode() + contents)
 		connectionSocket.close()
 
